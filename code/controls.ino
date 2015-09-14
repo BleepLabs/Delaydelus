@@ -9,6 +9,7 @@ void poll(){
   left_state = left_db.read();
 
 
+
   if ( right_ch && right_state == LOW ) {
     right_button=1;
   }
@@ -155,40 +156,60 @@ void pots(){
   if (sample_step<3){
 
     if (pot_tick==0){
-      //uint16_t sm10=digitalSmooth(analogRead(right_pot_pin)>>2, smootha1);
-      uint16_t sm10=analogRead(right_pot_pin);
-      right_pot=(sm10-255)*-1;
-      //right_pot=analogRead(A6);
+      if (midi_dly_en==0){
+
+        //uint16_t sm10=digitalSmooth(analogRead(right_pot_pin)>>2, smootha1);
+        uint16_t sm10=analogRead(right_pot_pin);
+        right_pot=(sm10-255)*-1;
+        //right_pot=analogRead(A6);
+      }
+      if (midi_dly_en==1){
+        right_pot=(midi_dly_fb-127)*-2;
+      }            
     }
 
 
     if (pot_tick==3){
-      uint16_t sm3=digitalSmooth(analogRead(middle_pot_pin), smootha2);
-      uint16_t log3=pow(sm3,2);
-      mp_smooth=log3>>8;
-      middle_pot=map(mp_smooth,0,255,NUM_SAMPS-4,0);
+      if (midi_dly_en==0){
+        mraw=analogRead(middle_pot_pin);
+        uint16_t rcmraw = readChange(0,mraw);
+        uint16_t sm3=digitalSmooth(rcmraw, smootha2);
+        uint16_t log3=pow(sm3,2);
+        mp_smooth=log3>>8;
+        middle_pot=map(mp_smooth,0,255,NUM_SAMPS-4,16);
+
+      }
+
+      if (midi_dly_en==1){
+        middle_pot=map(midi_dly_len,0,127,NUM_SAMPS-4,0);
+      }      
     }
 
     if (pot_tick==6){
-      uint16_t sm12 = digitalSmooth(analogRead(left_pot_pin),smootha0);
-      left_pot=(digitalSmooth(sm12,smootha0)-255)*-1;
 
-      if (left_pot>64&&left_pot<128){
-        rev=0;
-        pitch_pot=map(left_pot,64,128,20,128);
+      if (midi_pitch_en==0){
+        static byte normal_playback_rate=170;
+
+        uint16_t sm12 = digitalSmooth(analogRead(left_pot_pin),smootha0);
+        left_pot=(digitalSmooth(sm12,smootha0)-255)*-1;
+
+        if (left_pot>64&&left_pot<128){
+          rev=0;
+          pitch_pot=map(left_pot,64,128,20,normal_playback_rate);
+        }
+
+        if (left_pot>=128){
+          rev=0;
+          pitch_pot=map(left_pot,128,255,normal_playback_rate,pitch_max);
+        }
+
+        if (left_pot<=64){
+          rev=1;
+          pitch_pot=map(left_pot,0,64,pitch_max,40);
+
+        }
+
       }
-
-      if (left_pot>=128){
-        rev=0;
-        pitch_pot=map(left_pot,128,255,128,pitch_max);
-      }
-
-      if (left_pot<=64){
-        rev=1;
-        pitch_pot=map(left_pot,0,64,pitch_max,40);
-
-      }
-
     }
 
   }
@@ -210,6 +231,74 @@ void controls(){
 
   shift_b=shift_state;
 
+  if (shift_state==HIGH){
+    shift_low_cnt=0;
+    shift_held_low=0;
+  }
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////// T A P T A P T A P T A P T A P
+  //////////////////////////////////////////////////////////////////////////////////////////////////// T A P T A P T A P T A P T A P
+  //////////////////////////////////////////////////////////////////////////////////////////////////// T A P T A P T A P T A P T A P
+  //////////////////////////////////////////////////////////////////////////////////////////////////// T A P T A P T A P T A P T A P
+
+  if (master_mode==0){
+    if (shift_ch && shift_state==LOW)
+    {
+      //tap_bank[tap_bank_cnt]=tap_tempo_c;
+      tap_latch=1;
+      //tap_bank[tap_bank_cnt]=micros()-tap_tempo_p;
+      tap_tempo_c=micros()-tap_tempo_p;
+      tap_tempo_p=micros();
+
+    }
+
+    if (midi_tap==1 && p_midi_tap==0)
+    {
+      Serial.println("        MT");       
+
+      //tap_bank[tap_bank_cnt]=tap_tempo_c;
+      tap_latch=1;
+      //tap_bank[tap_bank_cnt]=micros()-tap_tempo_p;
+      tap_tempo_c=micros()-tap_tempo_p;
+      tap_tempo_p=micros();
+
+    }
+
+
+
+    if (tap_latch==1){
+      // tap_ave=(tap_bank[0]+tap_bank[1]+tap_bank[2]+tap_bank[3])/4/dds_rate; // cahnge it to 8 rather that 4 so it's twice as fast as you tap
+      tap_ave=tap_tempo_c/dds_rate;
+      tap_rate=((tap_ave-NUM_SAMPS)*-1);
+
+      if (tap_rate>NUM_SAMPS-4){
+        tap_rate=NUM_SAMPS-4;
+      }
+
+      if (tap_rate<2){
+        tap_rate=2;
+      }
+    }
+
+    if (tap_latch==0){
+      tap_rate=0;
+    }
+
+  }
+
+  /*
+  if (shift_state==LOW && shift_low_cnt<5000){
+   shift_low_cnt++;
+   //shift_held_low=0;
+   }
+   
+   if (shift_low_cnt>=5000){
+   //shift_low_cnt++;
+   shift_held_low=1;
+   //analogWrite(green_pin,4000);
+   
+   }
+   */
   if (shift_ch && shift_state==LOW)
   {
     if (master_mode==3)
@@ -252,6 +341,7 @@ void controls(){
     {
 
       bank_rst_c+=millis()-prevs;
+      
       if (bank_rst_c>=1500){
 
         for (int i = 0; i < 8; i++)
@@ -278,6 +368,7 @@ void controls(){
       }
 
     }
+    
     if (left_state==1){
       bank_rst_c=0;
     }
@@ -354,11 +445,16 @@ void controls(){
 
         i=i+8;
 
-        uint32_t el0 = pad_len*i *2;
+        uint32_t el0 = pad_len*4 *i *2;//change a 2 to 4 and uncomment errases bellow to get >8 seconds record time. second 2 is for 16b
         flash.erase_64k(el0);
         flash.erase_64k((el0)+0x010000);
-        // flash.erase_64k((el0)+0x020000);
-        // flash.erase_64k((el0)+0x030000);
+        flash.erase_64k((el0)+0x020000);
+        flash.erase_64k((el0)+0x030000);
+        flash.erase_64k((el0)+0x040000);
+        flash.erase_64k((el0)+0x050000);
+        flash.erase_64k((el0)+0x060000);         
+        flash.erase_64k((el0)+0x070000);         
+
         rec_ready[i]=1;
         er_trig[i]=0; 
         shift_b_c=0;
@@ -394,11 +490,12 @@ void controls(){
 
 int previnput[8];
 int readChange(byte n, int input){
-  int diff=32;
+  int diff=4;
   //int input = analogRead(n);
   int output;
   if ((input>(previnput[n]+diff))||(input<(previnput[n]-diff))){
-
+    tap_latch=0;
+    tap_rate=0;
     output= input;
     previnput[n]=input;
     //Serial.println("C");
@@ -514,7 +611,7 @@ int digitalSmooth(int rawIn, int *sensSmoothArray){     // "int *sensSmoothArray
    Serial.println();
    */
 
-  // throw out top and bottom 20% of samples - limit to throw out at least one from top and bottom
+  // throw out top and bottom 30% of samples - limit to throw out at least one from top and bottom
   bottom = max(((filterSamples * 20)  / 100), 1); 
   top = min((((filterSamples * 80) / 100) + 1  ), (filterSamples - 1));   // the + 1 is to make up for asymmetry caused by integer rounding
   k = 0;
@@ -535,7 +632,8 @@ int digitalSmooth(int rawIn, int *sensSmoothArray){     // "int *sensSmoothArray
 
 
 void poly_add(int pad){
-  byte added=0;;
+  byte added=0;
+  ;
 
   for (int i = 0; i < 4; i++)
   {
@@ -544,7 +642,7 @@ void poly_add(int pad){
       //Serial.print(i);Serial.print(" already ");Serial.println(pad);
       added=1;
     }
-}
+  }
 
   for (int i = 0; i < 4; i++)
   {
@@ -581,5 +679,7 @@ void poly_clear(){
     voice_bank[i]=0;
   }
 }
+
+
 
 
