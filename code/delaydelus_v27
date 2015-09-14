@@ -1,14 +1,9 @@
-
 static int16_t baya[] =
-{ 
-};
+{ };
 
 unsigned long baya_len=27300;
 
-
-static int16_t kick808a[] =
-{
-};
+static int16_t kick808a[] ={};
 unsigned long  kick808a_len=57708;
 
 
@@ -40,13 +35,11 @@ unsigned long  siren10_len=42780;
  dds pad for good dual saw or something?
  
  
-  */
+ */
 
 
 #include <SPIFIFO.h>
 #include <S25FLx_FIFO.h>
-
-
 
 #include <Bounce2.h>
 #define BOUNCE_LOCK-OUT
@@ -75,34 +68,35 @@ unsigned long  siren10_len=42780;
 #define blue_pin   6 
 #define green_pin  20  
 
-static byte pins[8] ={ 9,30,27,7,1,32,25,2}; 
+static byte pins[8] ={ 
+  9,30,27,7,1,32,25,2}; 
 
 /*
 // back to dip 
-#define cs  10  
-#define cs2  10  
-
-#define shift_pin  14   
-#define mode_pin  15
-#define left_button_pin  6   
-#define right_button_pin  7   
-
-#define left_select_pin  29  
-#define right_select_pin  28   
-
-
-#define input_pin  A9  
-#define left_pot_pin  A8  
-#define middle_pot_pin   A7 
-#define right_pot_pin  A6 
-
-
-#define red_pin  5  
-#define blue_pin   3 
-#define green_pin  4  
-
-static byte pins[8] ={   31,33,24,26,30,32,25,27}; 
-*/
+ #define cs  10  
+ #define cs2  10  
+ 
+ #define shift_pin  14   
+ #define mode_pin  15
+ #define left_button_pin  6   
+ #define right_button_pin  7   
+ 
+ #define left_select_pin  29  
+ #define right_select_pin  28   
+ 
+ 
+ #define input_pin  A9  
+ #define left_pot_pin  A8  
+ #define middle_pot_pin   A7 
+ #define right_pot_pin  A6 
+ 
+ 
+ #define red_pin  5  
+ #define blue_pin   3 
+ #define green_pin  4  
+ 
+ static byte pins[8] ={   31,33,24,26,30,32,25,27}; 
+ */
 
 
 flash flash;  //starts flash class and initilzes SPI
@@ -135,7 +129,8 @@ int smootha2 [filterSamples];
 int rawData1, smoothData1;  
 int rawData2, smoothData2; 
 
-int fbb[4]={};
+int fbb[4]={
+};
 int fbc;
 
 //delay
@@ -267,7 +262,7 @@ byte in_mode_b,shift_b,pin_mode_b,pshift_b,er_en;
 int shift_b_c,shift_b_ms;
 byte shift_b_en=0;
 int dds_r;
-
+int testj;
 
 int16_t comb_temp;
 
@@ -297,8 +292,7 @@ byte upload=0;
 byte up_bank_cnt;
 int spitch;
 int fm_mod;
-//long pad_len=0x020000; //length in 16b
-long pad_len=0x010000; //length in 16b
+long pad_len=0x010000; //length of default sample blocks in 16b
 
 uint16_t bank_rst_c;
 uint32_t sample_d,sample_t;
@@ -330,13 +324,29 @@ byte rst_i;
 int fh_sample_d;
 byte poll_tick;
 float lf;
+byte mchan=1;
+
+byte midi_pitch_en;
+byte midi_dly_en;
+
+uint16_t midi_pitch;
+uint16_t midi_dly_len;
+uint16_t midi_dly_fb;
 
 byte warning;
 int blue_out,red_out,grn_out,blue_out2,red_out2,grn_out2,Lj;
 uint32_t prevs,prev_led0;
 byte ledtick;
 int threshold1,threshold2;
-
+byte fader;
+int  shift_low_cnt, shift_held_low;
+uint16_t tap_tempo_cnt,mraw;
+uint32_t tap_tempo_c,tap_tempo_p,prev_tap_micros, tap_ave;
+uint32_t tap_bank[4]={};
+short tap_bank_cnt,tap_latch;
+int32_t tap_rate;
+short midi_tap,p_midi_tap;
+long poff;
 ////////////////////////////////
 
 const int dds_rate=36; //36=29.4 kHz
@@ -369,9 +379,7 @@ void setup() {
   }
 
 
-
-
-
+  
   pinMode(5, OUTPUT); //red
   pinMode(20, OUTPUT); //grenn
   pinMode(6, OUTPUT); //blue
@@ -446,94 +454,176 @@ void setup() {
   analogReadAveraging(4); //4 dosent help much? and past that it's expensive? 4 helps a litle
   analogWriteResolution(12);
 
-  int  pot0raw= analogRead(A11);
-  lerp_dly=knee_map(pot0raw);
-
+  mraw=analogRead(middle_pot_pin);
+  uint16_t log3=pow(mraw,2);
+  mp_smooth=log3>>8;
+  lerp_dly=map(mp_smooth,0,255,NUM_SAMPS-4,16);
+        
   pinMode(right_pot_pin, INPUT);
 
   SPIFIFO.begin(10,SPI_CLOCK_24MHz);
 
   //flash.erase_all();
 
-  upload=0;  ////////////////////////////////////////U P L O A AD AD DA A
+  //usbMIDI.setHandleNoteOn(OnNoteOn) ;
 
-  if (upload==0){
+  dds_tune=1/(dds_rate*.000001);
+  timer1.begin(hi, dds_rate); 
+  
+  right_ch = right_db.update();
+  left_ch = left_db.update();
 
-    dds_tune=1/(dds_rate*.000001);
-    timer1.begin(hi, dds_rate); 
+  if (left_db.read()==0){
+    mchan=2;
+  }
+  
+   if (right_db.read()==0){
+    mchan=3;
+  }
+  
+    if (right_db.read()==0 && left_db.read()==0){
+    mchan=4;
   }
 
 
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////
-byte fader;
+
+
 void loop() {
 
-  if (upload==0){
 
 
-
-    fader++;
-    if (fader>16)
-    {
-      fader=0;
+  fader++;
+  if (fader>16)
+  {
+    fader=0;
+  }
+  if (play_trig[fader]==0){
+    static byte fade_step=128;
+    if(out[fader]<-fade_step){
+      out[fader]+=fade_step;
     }
-    if (play_trig[fader]==0){
-      static byte fade_step=128;
-      if(out[fader]<-fade_step){
-        out[fader]+=fade_step;
-      }
-      if(out[fader]>fade_step){
-        out[fader]-=fade_step;
-      }
+    if(out[fader]>fade_step){
+      out[fader]-=fade_step;
+    }
 
-      if(out[fader]>=-fade_step && out[fader]<=fade_step){
-        out[fader]=0;
-      }
-
-
+    if(out[fader]>=-fade_step && out[fader]<=fade_step){
+      out[fader]=0;
     }
 
 
-    loop_m=micros();
-
-    LEDs();
-    pots();
-    poll();
-    controls(); 
-   //print_ctrl();
-    printer();
-
-    loop_t=micros()-loop_m;
-    fh1=find_high(4,500,loop_t);
-
   }
 
-  if (upload==1){
-    uploader1();
 
-  }
+  loop_m=micros();
+
+  MIDIchk();
+  LEDs();
+  pots();
+  poll();
+  controls(); 
+  print_ctrl();
+ // printer();
+
+  loop_t=micros()-loop_m;
+  fh1=find_high(4,500,loop_t);
+
+
+
 
 }
 
 
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+void MIDIchk(){
+  p_midi_tap=midi_tap;
+  if (usbMIDI.read()) {
+
+
+    if (usbMIDI.getChannel()==mchan) {
+
+      if (usbMIDI.getType()==1){
+   
+
+        analogWrite(red_pin,500);
+        analogWrite(green_pin,500);
+        analogWrite(blue_pin,500);
+
+
+          if(usbMIDI.getData1()==35){        //midi clock is not supported in usbMidi yet so it's b0
+          midi_tap=1;
+        }
+
+          if(usbMIDI.getData1()!=35){        
+          midi_tap=0;
+        }
+
+        for (byte i=0;i<16;i++){
+          if(usbMIDI.getData1()==i+36){
+            play_trig[i]=1;
+            poly_add(i);
+            acc[i+bank_sel[i]]=0;
+          }
+        }
+      }
+
+      if (usbMIDI.getType()==3){  
+        if (usbMIDI.getData1()==20){
+          midi_pitch_en=1;
+          midi_pitch=usbMIDI.getData2()*3;  //127 *3 = 381. Def pitch_max is 380 but in case this chages we'll clip it at pitch_max
+            if (midi_pitch>pitch_max){
+            midi_pitch=pitch_max;
+            }  
+          
+        }
+        if (usbMIDI.getData1()==21){
+          midi_pitch_en=1;
+          byte rev_t=usbMIDI.getData2();  //127 *3 = 381. Def pitch_max is 380 but in case this chages we'll clip it at pitch_max
+          if (rev_t<64){
+            rev=0;
+          }  
+          
+          if (rev_t>=64){
+            rev=1;
+          }  
+        }
+        
+        if (usbMIDI.getData1()==22){
+          midi_dly_en=1;
+          midi_dly_len=usbMIDI.getData2(); 
+        }
+        
+        if (usbMIDI.getData1()==23){
+          midi_dly_en=1;
+          midi_dly_fb=usbMIDI.getData2(); 
+        }
+        
+        
+      }
+
+    }
+
+  }
+}
+
 //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 void printer(){
   int fh_dds_t=find_high(0,10000,dds_t);
 
 
-  if (millis()-prevm>800 && master_mode!=99){
+  if (millis()-prevm>50 && master_mode!=99){
     prevm=millis();
 
-
-    Serial.println(threshold1);       
-       Serial.println(threshold2);       
-  Serial.println();       
+    Serial.println(left_pot);
+   // Serial.println(poff);       
+    Serial.println();       
 
   }
 
@@ -546,54 +636,56 @@ void print_ctrl(){
   if (millis()-prevm>300){
     prevm=millis();
 
-/*
+    /*
     for (int i = 0; i < 16; ++i)
-    {
-      Serial.print(s_len[i]);    
-      Serial.print(" ");
-
-    }
-    Serial.println();  
-
-
-        for (int i = 0; i < 16; ++i)
-    {
-      Serial.print(s_loc[i]);    
-      Serial.print(" ");
-
-    }
-    Serial.println();  
-
-        for (int i = 0; i < 8; ++i)
-    {
-      Serial.print(bank_sel[i]);    
-      Serial.print(" ");
-
-    }
-    Serial.println();  
-
-    for (int i = 0; i < 4; ++i)
-    {
-      Serial.print(voice_bank[i]);    
-      Serial.print(" ");
-
-    }
-    Serial.println();  
-*/
-    
-    Serial.println();       
-     Serial.print("R ");      Serial.print(right_state);      
-     Serial.print(" : "); 
-     for (int i = 0; i < 8; ++i)
      {
-     Serial.print(right_en[i]);   
+     Serial.print(s_len[i]);    
      Serial.print(" ");
      
      }
-   
+     Serial.println();  
+     
+     
+     for (int i = 0; i < 16; ++i)
+     {
+     Serial.print(s_loc[i]);    
+     Serial.print(" ");
+     
+     }
+     Serial.println();  
+     
+     for (int i = 0; i < 8; ++i)
+     {
+     Serial.print(bank_sel[i]);    
+     Serial.print(" ");
+     
+     }
+     Serial.println();  
+     
+     for (int i = 0; i < 4; ++i)
+     {
+     Serial.print(voice_bank[i]);    
+     Serial.print(" ");
+     
+     }
+     Serial.println();  
+     */
+
     Serial.println();       
-     Serial.print("L ");      Serial.print(left_state);      
-     Serial.print(" : "); 
+    Serial.print("R ");      
+    Serial.print(right_state);      
+    Serial.print(" : "); 
+    for (int i = 0; i < 8; ++i)
+    {
+      Serial.print(right_en[i]);   
+      Serial.print(" ");
+
+    }
+
+    Serial.println();       
+    Serial.print("L ");      
+    Serial.print(left_state);      
+    Serial.print(" : "); 
     for (int i = 0; i < 8; ++i)
     {
       Serial.print(left_en[i]);   
@@ -601,8 +693,8 @@ void print_ctrl(){
 
     }
 
-     Serial.println();
-     Serial.println();
+    Serial.println();
+    Serial.println();
 
 
     //Serial.println(fh_dds_t);       
@@ -723,9 +815,9 @@ prev_led0++;
       red_out2=700+(mod_in);
     }
 
-      analogWrite(blue_pin,(blue_out+blue_out2));
-      analogWrite(green_pin,(grn_out+grn_out2));
-      analogWrite(red_pin,(red_out+red_out2));
+    analogWrite(blue_pin,(blue_out+blue_out2));
+    analogWrite(green_pin,(grn_out+grn_out2));
+    analogWrite(red_pin,(red_out+red_out2));
 
 
 
@@ -741,8 +833,8 @@ prev_led0++;
 void ee_store(){
  
  
-  for (byte i=0;i<8;i++){
-    if (s_len[i]!=ps_len[i]){
+ for (byte i=0;i<8;i++){
+ if (s_len[i]!=ps_len[i]){
  //S/erial.print("eeeeee ");      Serial.print(i);
  // Serial.print(" ");      Serial.println(s_len[i]);
  byte byte3 = s_len[i] >> 24;
@@ -1071,5 +1163,6 @@ void uploader1(){
     upload=0;
   }
 }
+
 
 
