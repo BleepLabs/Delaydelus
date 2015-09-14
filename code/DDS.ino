@@ -1,7 +1,6 @@
 void hi(){
 
   // dds_d= micros();
-
   p_mode=sample_step;
 
   if (master_mode!=0) 
@@ -13,6 +12,7 @@ void hi(){
 //linear interpolation for delay time
   lerp_tick++;
 
+if (tap_rate==0 || tap_rate>NUM_SAMPS-10){
   if(lerp_tick>1){
     byte dly_step=1;
     if(lerp_dly <= middle_pot-4){   
@@ -24,6 +24,22 @@ void hi(){
 
     lerp_tick=0;
   }
+}
+
+if (tap_rate>0 && tap_rate<NUM_SAMPS-10){
+  if(lerp_tick>1){
+    byte dly_step=1;
+    if(lerp_dly <= tap_rate-4){   
+      lerp_dly +=dly_step;
+    }
+    if(lerp_dly >= tap_rate+4){
+      lerp_dly -= dly_step;
+    }
+
+    lerp_tick=0;
+  }
+}
+
 
 
   if (master_mode==0) 
@@ -95,9 +111,9 @@ void hi(){
 
 
   if (sample_step==3){ //record
-    ain =(mod_in*left_pot)>>2;
+    ain =(mod_in*left_pot)>>1;
     ainf=ain;
-    post_mod=ainf/3;
+    post_mod=(mod_in*left_pot)>>2;
 
     //sample_out=(ainf/3);
 
@@ -108,7 +124,7 @@ void hi(){
 
   if (master_mode==3){ //through 
     sample_step=0;
-    ain =(mod_in*left_pot)>>1;
+    ain =(mod_in*left_pot)>>2;
     post_mod=((ain)*thru_env)>>8;
 
     if (thru_mode==0)
@@ -161,9 +177,15 @@ void hi(){
     if (tick>3){
       tick=0;
     }
-
+  
+    if (midi_pitch_en==0){
     spitch=pitch_pot;
-
+    }
+    
+    if (midi_pitch_en==1){
+    spitch=midi_pitch;
+    }
+    
     // sample_t=micros();
     sample(0,voice_bank[0],spitch,read_buf[0]);
     sample(1,voice_bank[1],spitch,read_buf[1]);
@@ -184,7 +206,10 @@ void hi(){
   post_mod_f=hard_limit(post_mod);
 
   dly_out=vdelay(post_mod_f, lerp_dly ,right_pot);
-  analogWrite(A14, dly_out+2048);
+  
+//  testj+=8;
+// testj%=4000;
+  analogWrite(A14,dly_out+2048);
 
 
 //  dds_t=micros()-dds_d;
@@ -259,9 +284,20 @@ int vdelay(int input, uint16_t length, uint16_t fb_amt){
 
 
 void record(byte pad, int input){
+  uint32_t max_length, offset;
+  
+  if (pad<=7){
+   max_length= pad_len-64;
+   offset=(pad*pad_len);
+  
+}
+if (pad>7){
+   max_length= (pad_len*4)-64; //change 2 to 4 to get >8 seconds record time
+   offset=(pad*pad_len*4); //change 2 to 4 to get >8 seconds record time
+}
 
-  uint32_t max_length= pad_len-64;
-  uint32_t offset=(pad*pad_len);
+poff=offset;
+
 
   if (rec_ready[pad]==1 && rec_trig[pad]==0 && sample_step==3){
     rec_happend=1;
@@ -283,7 +319,7 @@ void record(byte pad, int input){
 
 
     if (w_loc>max_length){ 
-      Serial.println("   max");
+     // Serial.println("   max");
 
       ee_store(pad);
       wp=w_loc=buf_c=0;
@@ -326,9 +362,18 @@ void record(byte pad, int input){
 
 
 int16_t sample(byte place, byte pad, uint16_t pitch, int16_t* array){
-
+  uint32_t offset;
+  
+if (pad<=7){
   //byte rev=1;
-  uint32_t offset=(pad*pad_len);
+  offset=(pad*pad_len);
+  
+}
+if (pad>7){
+  //byte rev=1;
+   offset=(pad*pad_len*4); //change 2 to 4 to get >8 seconds record time
+  
+}
   if (pad<100){
 
     if (play_trig[pad]==0){
@@ -406,7 +451,8 @@ int16_t sample(byte place, byte pad, uint16_t pitch, int16_t* array){
 
         if (tick==place){
 
-
+          if (play_trig[pad]==1)
+          {
           if ((dx[pad]>s_len[pad]-ab_len)){
             s_loc[pad]=0;
             play_trig[pad]=0;
@@ -424,6 +470,19 @@ int16_t sample(byte place, byte pad, uint16_t pitch, int16_t* array){
             dxflip[pad]=s_len[pad];
           }
           // s_loc[pad]=dx[pad];
+          }
+
+          if (play_trig[pad]==2)
+          {
+            if ((dxflip[pad]<ab_len)){
+              s_loc[pad]=s_len[pad];
+              acc[pad]=0;
+              dx[pad]=1;
+              dxflip[pad]=s_len[pad];
+              }
+
+          }
+
 
           s_loc[pad]=(dxflip[pad])-ab_len;
           if (s_loc[pad]<0){
@@ -449,10 +508,11 @@ int16_t sample(byte place, byte pad, uint16_t pitch, int16_t* array){
 
 
 
-    }
+    
 
 
   }
+}
   return out[pad];
 }
 
