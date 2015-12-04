@@ -69,7 +69,7 @@ if (tap_rate>0 && tap_rate<NUM_SAMPS-10){
 
     if (amod_in>70 && p_mod_in<70 && lockout==0)
     {
-      for (int i = 0; i < 8; i++)
+      for (int i = 0; i < 16; i++)
       {
         if (left_en[i]==0){
           play_trig[i+bank_sel[i]]=1;
