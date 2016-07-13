@@ -252,7 +252,7 @@ void setup() {
   for (int i = 0; i < 1023; ++i)
   {
 
-    EEPROM.write( i, 0);
+  //  EEPROM.write( i, 0); //errase eeprom which would delete the user sample lengths and thus the samples
      // analogWrite(5, i);
 
   }
