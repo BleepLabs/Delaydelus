@@ -1,8 +1,11 @@
+
 #include <S25FLx_FIFO.h>
 
 #include <Bounce2.h>
 #define BOUNCE_LOCK-OUT
 
+
+// smd v4 really really
 
 #define cs  10  
 #define cs2  10  
@@ -367,8 +370,10 @@ void setup() {
 
 
   r_loc1=64000;
-
+  
+  delay(1000);
   ee_ret();
+  delay(1000);
   /*
    for (int i = 0; i < 16; ++i)
    {
@@ -483,7 +488,7 @@ void loop() {
   pots();
   poll();
   controls(); 
-  print_ctrl();
+ // print_ctrl();
  // printer();
 
   loop_t=micros()-loop_m;
@@ -501,13 +506,10 @@ void loop() {
 void MIDIchk(){
   p_midi_tap=midi_tap;
   if (usbMIDI.read()) {
-
-
+    
     if (usbMIDI.getChannel()==mchan) {
-
       if (usbMIDI.getType()==1){
    
-
         analogWrite(red_pin,500);
         analogWrite(green_pin,500);
         analogWrite(blue_pin,500);
@@ -838,8 +840,19 @@ void ee_store(byte pad){
 void ee_ret(){
 
 
+//early versions had these erad from the eeprom but the eeprom can get corrupted or errased randomly it seems.
+//These don't change anyway soooo
 
-  for (byte i=0;i<16;i++){
+  s_len[0]=63625; //upload 1 bass808_len
+  s_len[1]=7872; //upload2 clap004_len=7872;
+  s_len[2]=38000; //1 boooh
+  s_len[3]=15495; //2 beats
+  s_len[4]=19155; //2 sqeak
+  s_len[5]=57375; //3 lion
+  s_len[6]=15495; //2 "siren" 
+  s_len[7]=45745; //3 BWWWWWEEEEEERRWWAAAAAAAAAAAAA
+
+  for (byte i=8;i<16;i++){
 
     byte byte3 = EEPROM.read(i+(4*i));
     byte byte2 = EEPROM.read(i+(4*i)+1);
@@ -936,4 +949,6 @@ void E_pad(unsigned long pad){
   Serial.println(" erased????");
 
 }
+
+
 
