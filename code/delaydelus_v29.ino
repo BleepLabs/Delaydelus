@@ -864,9 +864,11 @@ void ee_ret(){
     //  Serial.print(byte1); Serial.print(" ");
     //  Serial.println(byte0);
 
-    s_len[i]= (byte3<<24)+(byte3<<16)+(byte3<<8)+(byte0);
-
-    s_len[i]= (byte3<<24)+(byte2<<16)+(byte1<<8)+(byte0);
+    uint32_t tlen = (byte3<<24)+(byte3<<16)+(byte3<<8)+(byte0);
+    if (tlen>pad_len){
+      tlen=pad_len-1;
+    }
+    s_len[i]= tlen;
     Serial.print("LEN "); 
     Serial.print(i);
     Serial.print(" "); 
