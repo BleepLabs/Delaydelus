@@ -323,7 +323,7 @@ void setup() {
 
 
 
-  Serial.begin(9600);
+ // Serial.begin(9600);
   //  while (!Serial) {}
 
   delay(200);
@@ -371,33 +371,9 @@ void setup() {
 
   r_loc1=64000;
   
-  delay(1000);
+  //delay(1000); //just so you can see the first printout
   ee_ret();
-  delay(1000);
-  /*
-   for (int i = 0; i < 16; ++i)
-   {
-   if (s_len[i]>pad_len || s_len[i]<16){
-   s_len[i]=pad_len>>2;
-   }
-   }
-   
-   for (int i = 4; i < 8; ++i)
-   {
-   bank_sel[i]=8;;
-   }
-   
-   for (int i = 0; i < 16; ++i)
-   {
-   ee_store(i);
-   }
-   Serial.println("");        
-   Serial.println("THUIS ONE");        
-   Serial.println("");        
-   
-   
-   ee_ret();
-   */
+
 
   right_ch = right_db.update();
   right_state = right_db.read();
@@ -577,12 +553,16 @@ void printer(){
   int fh_dds_t=find_high(0,10000,dds_t);
 
 
-  if (millis()-prevm>50 && master_mode!=99){
+  if (millis()-prevm>500 && master_mode!=99){
     prevm=millis();
 
-    Serial.println(left_pot);
-   // Serial.println(poff);       
-    Serial.println();       
+    for (int i = 0; i < 16; ++i)
+     {
+     Serial.print(s_len[i]);    
+     Serial.print(" ");
+     
+     }
+          Serial.println();
 
   }
 
@@ -786,34 +766,6 @@ prev_led0++;
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////
-/*
-void ee_store(){
- 
- 
- for (byte i=0;i<8;i++){
- if (s_len[i]!=ps_len[i]){
- //S/erial.print("eeeeee ");      Serial.print(i);
- // Serial.print(" ");      Serial.println(s_len[i]);
- byte byte3 = s_len[i] >> 24;
- byte byte2 = s_len[i] >> 16;
- byte byte1 = s_len[i] >> 8;
- byte byte0 = s_len[i] & 255;
- 
- EEPROM.write(i+(4*i),   byte3);
- EEPROM.write(i+(4*i)+1, byte2);
- EEPROM.write(i+(4*i)+2, byte1);
- EEPROM.write(i+(4*i)+3, byte0);
- 
- }
- ps_len[i]=s_len[i];
- 
- }
- }
- */
-
-
 void ee_store(byte pad){
   //Serial.print("ee_stored "); Serial.println(pad);
 
@@ -840,7 +792,7 @@ void ee_store(byte pad){
 void ee_ret(){
 
 
-//early versions had these erad from the eeprom but the eeprom can get corrupted or errased randomly it seems.
+//early versions had these read from the eeprom but the eeprom can get corrupted or errased randomly it seems.
 //These don't change anyway soooo
 
   s_len[0]=63625; //upload 1 bass808_len
@@ -853,7 +805,6 @@ void ee_ret(){
   s_len[7]=45745; //3 BWWWWWEEEEEERRWWAAAAAAAAAAAAA
 
   for (byte i=8;i<16;i++){
-
     byte byte3 = EEPROM.read(i+(4*i));
     byte byte2 = EEPROM.read(i+(4*i)+1);
     byte byte1 = EEPROM.read(i+(4*i)+2);
@@ -864,11 +815,13 @@ void ee_ret(){
     //  Serial.print(byte1); Serial.print(" ");
     //  Serial.println(byte0);
 
+    s_len[i]= (byte3<<24)+(byte2<<16)+(byte1<<8)+(byte0);
+
     uint32_t tlen = (byte3<<24)+(byte3<<16)+(byte3<<8)+(byte0);
-    if (tlen>pad_len){
-      tlen=pad_len-1;
+    if (tlen>65530){
+      tlen=65530;
     }
-    s_len[i]= tlen;
+    
     Serial.print("LEN "); 
     Serial.print(i);
     Serial.print(" "); 
